@@ -20,10 +20,16 @@ const SideBar = () => {
         <NavLink
         to={item.path}
         key={item.name}
-        end={item.path === '/educator'}>
-          <img src={item.icon} alt="" className='w-6 h-6' />
-          <p className='md:block hidden text-center'>{item.name}</p>
-        </NavLink>
+        end={item.path === '/educator'}
+        className={({ isActive }) =>
+          `flex items-center md:flex-row flex-col md:justify-start py-3.5 md:px-8 gap-3 
+          ${isActive ? 'bg-indigo-50 border-r-[6px] border-indigo-500/90' : 
+          'hover:bg-gray-100/90 border-r-[6px] border-white hover:border-gray-100/90'}`
+        }>
+        <img src={item.icon} alt="" className="w-6 h-6 shrink-0" />
+        <p className="md:block hidden text-sm truncate max-w-[140px]">{item.name}</p>
+      </NavLink>
+
       ))}
       </div>
   )

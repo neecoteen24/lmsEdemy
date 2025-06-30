@@ -9,13 +9,16 @@
     "routes": [
         {
             "src": "/clerk",
-            "dest": "server.js",
-            "methods": ["POST"],
-            "continue": true
+            "dest": "/server.js",
+            "methods": ["POST"]
+        },
+        {
+            "src": "/api/(.*)",
+            "dest": "/server.js"
         },
         {
             "src": "/(.*)",
-            "dest": "server.js"
+            "dest": "/server.js"
         }
     ]
 }

@@ -10,19 +10,29 @@ try {
 //API Controller Function to manage clerk user with database
 export const clerkWebhooks = async (req, res) => {
   console.log('Webhook received');
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  console.log('Raw Body:', req.body.toString());
+  console.log('All Headers:', req.headers);
+  console.log('Content-Type:', req.headers['content-type']);
+  console.log('svix-id:', req.headers['svix-id']);
+  console.log('svix-timestamp:', req.headers['svix-timestamp']);
+  console.log('svix-signature:', req.headers['svix-signature']);
   
   try {
     if (!process.env.CLERK_WEBHOOK_SECRET) {
+      console.error('CLERK_WEBHOOK_SECRET is not set in environment variables');
       throw new Error('CLERK_WEBHOOK_SECRET is not set');
     }
 
+    console.log('CLERK_WEBHOOK_SECRET length:', process.env.CLERK_WEBHOOK_SECRET.length);
     const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
     console.log('Webhook instance created');
 
-    // Parse the raw body since we're using express.raw()
-    const payload = JSON.parse(req.body);
+    // Log the raw body
+    console.log('Raw body type:', typeof req.body);
+    console.log('Raw body instanceof Buffer:', req.body instanceof Buffer);
+    const rawBody = req.body instanceof Buffer ? req.body : Buffer.from(req.body);
+    
+    // Parse the raw body
+    const payload = JSON.parse(rawBody);
     console.log('Parsed payload:', payload);
 
     const headerPayload = {
@@ -30,13 +40,18 @@ export const clerkWebhooks = async (req, res) => {
       "svix-timestamp": req.headers["svix-timestamp"],
       "svix-signature": req.headers["svix-signature"]
     };
-    console.log('Header payload:', headerPayload);
+    console.log('Header payload for verification:', headerPayload);
 
     try {
-      await whook.verify(req.body, headerPayload);
+      await whook.verify(rawBody, headerPayload);
       console.log('Webhook verified successfully');
     } catch (err) {
       console.error('Webhook verification failed:', err);
+      console.error('Verification attempted with:', {
+        headerPayload,
+        secretLength: process.env.CLERK_WEBHOOK_SECRET.length,
+        bodyLength: rawBody.length
+      });
       return res.status(400).json({ 
         error: 'Webhook verification failed',
         details: err.message 

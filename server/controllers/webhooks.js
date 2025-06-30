@@ -1,5 +1,11 @@
 import { Webhook } from "svix";
-import User from "../models/User";
+let User;
+try {
+  User = (await import("../models/User.js")).default;
+} catch (importError) {
+  console.error("Failed to import User model:", importError);
+  throw importError;
+}
 
 //API Controller Function to manage clerk user with database
 
@@ -50,6 +56,7 @@ export const clerkWebhooks = async (req,res)=>{
     }
 
   } catch(error) {
-      res.json({success: false, message: error.message})
+      console.error("Webhook handler error:", error);
+      res.json({success: false, message: error.message, stack: error.stack})
   }
 }

@@ -1,4 +1,8 @@
+import Stripe from "stripe";
 import { Webhook } from "svix";
+import Purchase from "../models/Purchase.js";
+import Course from "../models/Course.js";
+
 let User;
 try {
   User = (await import("../models/User.js")).default;
@@ -10,28 +14,18 @@ try {
 //API Controller Function to manage clerk user with database
 export const clerkWebhooks = async (req, res) => {
   console.log('Webhook received');
-  console.log('All Headers:', req.headers);
-  console.log('Content-Type:', req.headers['content-type']);
-  console.log('svix-id:', req.headers['svix-id']);
-  console.log('svix-timestamp:', req.headers['svix-timestamp']);
-  console.log('svix-signature:', req.headers['svix-signature']);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
   
   try {
     if (!process.env.CLERK_WEBHOOK_SECRET) {
-      console.error('CLERK_WEBHOOK_SECRET is not set in environment variables');
       throw new Error('CLERK_WEBHOOK_SECRET is not set');
     }
 
-    console.log('CLERK_WEBHOOK_SECRET length:', process.env.CLERK_WEBHOOK_SECRET.length);
     const whook = new Webhook(process.env.CLERK_WEBHOOK_SECRET);
     console.log('Webhook instance created');
 
-    // Log the raw body
-    console.log('Raw body type:', typeof req.body);
-    console.log('Raw body instanceof Buffer:', req.body instanceof Buffer);
+    // Ensure we're working with Buffer data
     const rawBody = req.body instanceof Buffer ? req.body : Buffer.from(req.body);
-    
-    // Parse the raw body
     const payload = JSON.parse(rawBody);
     console.log('Parsed payload:', payload);
 
@@ -40,18 +34,13 @@ export const clerkWebhooks = async (req, res) => {
       "svix-timestamp": req.headers["svix-timestamp"],
       "svix-signature": req.headers["svix-signature"]
     };
-    console.log('Header payload for verification:', headerPayload);
+    console.log('Header payload:', headerPayload);
 
     try {
       await whook.verify(rawBody, headerPayload);
       console.log('Webhook verified successfully');
     } catch (err) {
       console.error('Webhook verification failed:', err);
-      console.error('Verification attempted with:', {
-        headerPayload,
-        secretLength: process.env.CLERK_WEBHOOK_SECRET.length,
-        bodyLength: rawBody.length
-      });
       return res.status(400).json({ 
         error: 'Webhook verification failed',
         details: err.message 
@@ -133,3 +122,66 @@ export const clerkWebhooks = async (req, res) => {
     });
   }
 };
+
+const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY)
+export const stripeWebhooks = async(req,res)=> {
+   const sig = request.headers['stripe-signature'];
+
+    let event;
+
+    try {
+      event = Stripe.webhooks.constructEvent(request.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    }
+    catch (err) {
+      response.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+      switch (event.type) {
+    case 'payment_intent.succeeded': {
+      const paymentIntent = event.data.object;}
+      const paymentIntentId = paymentIntent.id;
+    
+
+      const session = await stripeInstance.checkout.sessions.list({
+        payment_intent: paymentIntentId
+      })
+
+      const {purchaseId} = session.data[0].metadata;
+
+      const purchaseData = await Purchase.findById(purchaseId)
+
+      const userData = User.findById(purchaseData.userId)
+
+      const courseData = await Course.findById(purchaseData.courseId.toString())
+
+      courseData.enrolledStudents.push(userData)
+      await courseData.save()
+      userData.enrolledCousres.push(courseData._id)
+      await userData.save()
+
+      purchaseData.status = 'completed'
+      await purchaseData.save()
+      
+      break;
+    case 'payment_intent.payment_failed':{
+      const paymentMethod = event.data.object;
+      const paymentIntent = event.data.object;
+      const paymentIntentId = paymentIntent.id;
+    
+
+      const session = await stripeInstance.checkout.sessions.list({
+        payment_intent: paymentIntentId
+      })
+
+      const {purchaseId} = session.data[0].metadata;
+      const purchaseData = await Purchase.findById(purchaseId)
+      purchaseData.status = 'failed'
+      await purchaseData.save()
+      break;}
+    // ... handle other event types
+    default:
+      console.log(`Unhandled event type ${event.type}`);
+  }
+  response.json({received: true});
+
+}

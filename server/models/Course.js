@@ -32,6 +32,7 @@ const courseSchema = new mongoose.Schema({
       type: String, ref:'User'
     }
   ],
+  courseThumbnail: {type: String},
 },{timestamps: true, minimize:false})
 
 

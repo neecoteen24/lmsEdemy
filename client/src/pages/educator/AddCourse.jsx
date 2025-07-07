@@ -1,9 +1,14 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState,useContext } from 'react';
 import Quill from 'quill';
 import 'quill/dist/quill.snow.css';
 import { assets } from '../../assets/assets';
+import { AppContext } from '../../context/AppContext';
+import { toast } from 'react-toastify';
+import axios from 'axios';
 
 const AddCourse = () => {
+
+  const {backendUrl, getToken} = useContext(AppContext)
   const quillRef = useRef(null);
   const editorRef = useRef(null);
 
@@ -21,6 +26,58 @@ const AddCourse = () => {
     lectureUrl: '',
     isPreviewFree: false,
   });
+
+  const handleSubmit = async(e)=>{
+    e.preventDefault();
+    try {
+      if(!thumbnail){
+        toast.error('Please upload a thumbnail');
+        return;
+      }
+
+      // Ensure all chapters and lectures have required fields
+      const chaptersWithIds = chapters.map((chapter, chapterIdx) => ({
+        ...chapter,
+        chapterId: chapter.chapterId || `chapter${chapterIdx + 1}`,
+        chapterOrder: chapter.chapterOrder || chapterIdx + 1,
+        chapterContent: chapter.chapterContent.map((lecture, lectureIdx) => ({
+          ...lecture,
+          lectureId: lecture.lectureId || `lecture${lectureIdx + 1}`,
+          lectureOrder: lecture.lectureOrder || lectureIdx + 1,
+        }))
+      }));
+
+      const courseData = {
+        courseTitle,
+        courseDescription: quillRef.current.root.innerHTML,
+        coursePrice: Number(coursePrice),
+        discount: Number(discount),
+        courseContent: chaptersWithIds,
+      } 
+      
+      const formData = new FormData();
+      formData.append('courseData', JSON.stringify(courseData));
+      formData.append('image', thumbnail);
+
+      const token = await getToken();
+      const {data} = await axios.post(backendUrl + '/api/educator/add-course', formData, {headers: {Authorization: `Bearer ${token}`}});
+
+      if(data.success){
+        toast.success(data.message);
+        setCourseTitle('');
+        setCoursePrice('');
+        setDiscount('');
+        setThumbnail(null);
+        setPreviewUrl(null);
+        setChapters([]);
+        quillRef.current.root.innerHTML = '';
+      } else {
+        toast.error(data.message);
+      }
+    } catch(error) {
+      toast.error(error.message);
+    }
+  }
 
   useEffect(() => {
     if (editorRef.current && !quillRef.current) {
@@ -42,7 +99,8 @@ const handleAddChapter = () => {
   if (!chapterName) return;
 
   const newChapter = {
-    id: chapters.length + 1,
+    chapterId: `chapter${chapters.length + 1}`,
+    chapterOrder: chapters.length + 1,
     chapterTitle: chapterName,
     chapterContent: [],
     collapsed: false,
@@ -62,7 +120,15 @@ const handleAddChapter = () => {
 
   const handleAddLecture = () => {
     const updatedChapters = [...chapters];
-    updatedChapters[selectedChapterIndex].chapterContent.push(lectureDetails);
+    const chapter = updatedChapters[selectedChapterIndex];
+    const lectureOrder = chapter.chapterContent.length + 1;
+    const lectureId = `lecture${lectureOrder}`;
+    const newLecture = {
+      ...lectureDetails,
+      lectureOrder,
+      lectureId,
+    };
+    chapter.chapterContent.push(newLecture);
     setChapters(updatedChapters);
 
     setLectureDetails({
@@ -84,25 +150,11 @@ const handleAddChapter = () => {
     setChapters(updatedChapters);
   };
 
-  const handleAddCourse = (e) => {
-    e.preventDefault();
-    const description = quillRef.current.root.innerHTML;
-
-    console.log({
-      courseTitle,
-      description,
-      coursePrice,
-      discount,
-      thumbnail,
-      chapters,
-    });
-  };
-
   return (
     <div className="h-screen overflow-scroll flex flex-col items-start md:p-8 p-4 pt-8">
       <form
         className="flex flex-col gap-4 w-full max-w-xl"
-        onSubmit={handleAddCourse}
+        onSubmit={handleSubmit}
       >
         <div className="flex flex-col gap-1">
           <p>Course Title</p>
